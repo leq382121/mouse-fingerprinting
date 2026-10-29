@@ -1,0 +1,33 @@
+{
+  "name": "mouse-fingerprinting",
+  "version": "0.1.0",
+  "description": "Behavioural fingerprinting from how people use a web page: mouse movement, scrolling, selection and form habits",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./collector": "./src/collector.js",
+    "./features": "./src/features.js",
+    "./interaction": "./src/interaction.js",
+    "./matcher": "./src/matcher.js"
+  },
+  "files": [
+    "src/",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leq382121/mouse-fingerprinting.git"
+  },
+  "keywords": [
+    "behavioural-biometrics",
+    "mouse-dynamics",
+    "fingerprinting",
+    "bot-detection"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "bench": "node bench/benchmark.js",
+    "demo": "python3 -m http.server 8080"
+  }
+}

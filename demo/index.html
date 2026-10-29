@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mouse Fingerprint Demo</title>
+<style>
+  :root {
+    --bg: #f6f6f4; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e2e2dc; --accent: #2f6fde; --ok: #1f8a4c; --warn: #b5651d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161615; --panel: #1f1f1d; --text: #ececea; --muted: #9a9a94;
+      --line: #33332f; --accent: #6b9cff; --ok: #4cc27f; --warn: #e09a55;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  main { display: grid; grid-template-columns: 1fr 320px; gap: 16px; padding: 16px; height: 100vh; }
+  .left { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+  #arena { position: relative; flex: 1; min-height: 240px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; cursor: crosshair; }
+  #reading { height: 38%; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 18px; }
+  #reading h2 { margin-top: 4px; } #reading p { max-width: 70ch; }
+  #reading form { display: grid; gap: 8px; max-width: 360px; margin: 16px 0 8px; }
+  #reading label { display: grid; gap: 2px; color: var(--muted); }
+  #arena p { position: absolute; top: 12px; left: 16px; margin: 0; color: var(--muted); pointer-events: none; }
+  #target { position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; background: var(--accent); }
+  aside { display: flex; flex-direction: column; gap: 12px; overflow: auto; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+  dl { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; margin: 0; }
+  dt { color: var(--muted); } dd { margin: 0; font-variant-numeric: tabular-nums; }
+  input, button { font: inherit; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  button { cursor: pointer; } button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .row { display: flex; gap: 8px; margin-top: 8px; } .row > input { flex: 1; min-width: 0; }
+  #result { min-height: 1.4em; } .ok { color: var(--ok); } .warn { color: var(--warn); }
+  ol { margin: 6px 0 0; padding-left: 20px; } li { font-variant-numeric: tabular-nums; }
+  @media (max-width: 720px) { main { grid-template-columns: 1fr; height: auto; } #arena { height: 60vh; flex: none; } #reading { height: 50vh; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="left">
+    <div id="arena"><p>Click the dot.</p><div id="target"></div></div>
+    <div id="reading">
+      <h2>Read, select, copy, fill in</h2>
+      <p>Scroll through this text the way you normally read. Select a few words or a line the way you normally would: double-click, triple-click, drag, or Shift and the arrow keys. Copy something and paste it into the form below.</p>
+      <p>Cable assemblies are built from a bill of materials that lists every wire, connector, terminal and seal. Each part has its own lead time, minimum order quantity and price break, and the quote for a harness depends on all of them at once. Labour is estimated from the number of cut, strip, crimp and test operations, and from how much of that work can be done on automatic machines.</p>
+      <p>When a customer changes a drawing, the quote has to change with it. A new connector can mean a new crimp tool, a longer lead time, or a different supplier, and the effect ripples through the delivery date and the margin. Keeping a clear history of revisions makes it much easier to explain why a price moved.</p>
+      <p>Testing is part of the cost too. Continuity and insulation tests are routine, but some customers need hipot testing, pull tests on crimps, or full traceability of every lot. Those requirements belong in the quote from the start, not as surprises on the invoice.</p>
+      <form id="form">
+        <label>Name<input name="name" autocomplete="off"></label>
+        <label>Email<input name="email" autocomplete="off"></label>
+        <label>Message<textarea name="message" rows="3"></textarea></label>
+        <button class="primary">Send</button>
+      </form>
+      <p style="color:var(--muted)">Nothing here is sent anywhere; the form only records how you filled it in, not what you typed.</p>
+    </div>
+  </div>
+  <aside>
+    <section>
+      <h2>Current sample</h2>
+      <dl id="stats"></dl>
+    </section>
+    <section>
+      <h2>Enroll</h2>
+      <div>Click ~60 dots, use the text and form below, then save under a name.</div>
+      <div class="row"><input id="name" placeholder="Name"><button id="enroll" class="primary">Save</button></div>
+    </section>
+    <section>
+      <h2>Identify</h2>
+      <div>Click ~20 dots, then ask who it was.</div>
+      <div class="row"><button id="identify" class="primary">Who is this?</button><button id="clear">Clear sample</button></div>
+      <div id="result"></div>
+      <ol id="ranking"></ol>
+    </section>
+    <section>
+      <h2>Profiles</h2>
+      <ul id="profiles" style="margin:0;padding-left:18px"></ul>
+      <div class="row"><button id="reset">Delete all</button><button id="export">Download events</button></div>
+    </section>
+  </aside>
+</main>
+<script type="module">
+  import { BehaviourCollector } from '../src/collector.js';
+  import { extractFingerprint, fingerprintWindows } from '../src/features.js';
+  import { ProfileStore } from '../src/matcher.js';
+
+  const KEY = 'mouse-fingerprint-profiles';
+  const $ = (id) => document.getElementById(id);
+  const arena = $('arena');
+  const target = $('target');
+  const collector = new BehaviourCollector().start();
+  $('form').addEventListener('submit', (e) => { e.preventDefault(); e.target.reset(); });
+
+  let store = new ProfileStore();
+  try { store = ProfileStore.fromJSON(JSON.parse(localStorage.getItem(KEY) ?? '{}')); } catch {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch {} };
+
+  function placeTarget() {
+    const r = arena.getBoundingClientRect();
+    target.style.left = `${30 + Math.random() * (r.width - 60)}px`;
+    target.style.top = `${50 + Math.random() * (r.height - 80)}px`;
+  }
+  target.addEventListener('pointerdown', () => { setTimeout(placeTarget, 120); });
+  placeTarget();
+
+  const fmt = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : '–');
+  function renderStats() {
+    const fp = extractFingerprint(collector.events);
+    const s = fp.summary;
+    const c = fp.interaction;
+    const f = fp.features;
+    const pct = (x) => (Number.isFinite(x) ? `${Math.round(x * 100)}%` : '–');
+    $('stats').innerHTML = [
+      ['Strokes', fp.strokeCount], ['Clicks', fp.clickCount], ['Quality', fp.quality],
+      ['Peak speed (px/ms)', fmt(s.medianPeakSpeedPxPerMs)],
+      ['Straightness', fmt(s.medianStraightness)],
+      ['Overshoot', `${fmt(s.medianOvershootPct, 1)}%`],
+      ['Click hold (ms)', fmt(s.medianClickHoldMs, 0)],
+      ['Keyboard actions', c.keyboardActions],
+      ['Selections', c.selections], ['Copy/paste', c.clipboard],
+      ['Scroll bursts', c.scrollBursts], ['Cursor rests', c.rests],
+      ['Fields filled', c.fieldsFilled],
+      ['Tab between fields', pct(f.field_tab_share)],
+      ['Scroll with wheel', pct(f.scroll_wheel_share)],
+    ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  }
+  setInterval(renderStats, 500);
+
+  function renderProfiles() {
+    $('profiles').innerHTML = store.ids().map((id) =>
+      `<li>${id.replace(/</g, '&lt;')} <span style="color:var(--muted)">(${store.profiles.get(id).samples.length} samples)</span></li>`
+    ).join('') || '<li style="color:var(--muted)">None yet</li>';
+  }
+  renderProfiles();
+
+  $('enroll').onclick = () => {
+    const name = $('name').value.trim();
+    if (!name) return ($('name').focus());
+    const windows = fingerprintWindows(collector.events, { strokesPerWindow: 20 });
+    if (windows.length === 0) { $('result').innerHTML = '<span class="warn">Not enough movement yet — click more dots.</span>'; return; }
+    for (const w of windows) store.enroll(name, w);
+    save();
+    collector.clear();
+    renderProfiles();
+    $('result').textContent = `Saved ${windows.length} samples for ${name}.`;
+  };
+
+  $('identify').onclick = () => {
+    const fp = extractFingerprint(collector.events);
+    if (store.ids().length === 0) { $('result').textContent = 'Enroll at least one profile first.'; return; }
+    if (fp.quality === 'low') { $('result').innerHTML = '<span class="warn">Need at least 15 strokes.</span>'; return; }
+    const { best, distance, ranking } = store.identify(fp);
+    const esc = (s) => s.replace(/</g, '&lt;');
+    $('result').innerHTML = best
+      ? `<span class="ok">Looks like <b>${esc(best)}</b></span> (distance ${fmt(distance)})`
+      : `<span class="warn">No confident match</span> (closest ${fmt(distance)})`;
+    $('ranking').innerHTML = ranking.map((r) => `<li>${esc(r.id)} — ${fmt(r.distance)}</li>`).join('');
+  };
+
+  $('clear').onclick = () => { collector.clear(); $('result').textContent = ''; $('ranking').innerHTML = ''; };
+  $('reset').onclick = () => { store = new ProfileStore(); save(); renderProfiles(); };
+  $('export').onclick = () => {
+    const blob = new Blob([JSON.stringify(collector.events)], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'mouse-events.json' });
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+</script>
+</body>
+</html>
